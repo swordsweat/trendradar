@@ -1,36 +1,38 @@
 # coding=utf-8
 """
-AI 客户端模块
+AI �ͻ���ģ��
 
-基于 LiteLLM 的统一 AI 模型接口
-支持 100+ AI 提供商（OpenAI、DeepSeek、Gemini、Claude、国内模型等）
+���� LiteLLM ��ͳһ AI ģ�ͽӿ�
+֧�� 100+ AI �ṩ�̣�OpenAI��DeepSeek��Gemini��Claude������ģ�͵ȣ�
 """
 
 import os
+import uuid
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 from litellm import completion
 
 
 class AIClient:
-    """统一的 AI 客户端（基于 LiteLLM）"""
+    """ͳһ�� AI �ͻ��ˣ����� LiteLLM��"""
 
     def __init__(self, config: Dict[str, Any]):
         """
-        初始化 AI 客户端
+        ��ʼ�� AI �ͻ���
 
         Args:
-            config: AI 配置字典
-                - MODEL: 模型标识（格式: provider/model_name）
-                - API_KEY: API 密钥
-                - API_BASE: API 基础 URL（可选）
-                - TEMPERATURE: 采样温度
-                - MAX_TOKENS: 最大生成 token 数
-                - TIMEOUT: 请求超时时间（秒）
-                - NUM_RETRIES: 重试次数（可选）
-                - FALLBACK_MODELS: 备用模型列表（可选）
-                - EXTRA_PARAMS: 透传给 LiteLLM 的额外参数（可选），如
-                  extra_headers、top_p、presence_penalty、stop 等
+            config: AI �����ֵ�
+                - MODEL: ģ�ͱ�ʶ����ʽ: provider/model_name��
+                - API_KEY: API ��Կ
+                - API_BASE: API ���� URL����ѡ��
+                - TEMPERATURE: �����¶�
+                - MAX_TOKENS: ������� token ��
+                - TIMEOUT: ����ʱʱ�䣨�룩
+                - NUM_RETRIES: ���Դ�������ѡ��
+                - FALLBACK_MODELS: ����ģ���б�����ѡ��
+                - EXTRA_PARAMS: ͸���� LiteLLM �Ķ����������ѡ������
+                  extra_headers��top_p��presence_penalty��stop ��
         """
         self.model = config.get("MODEL", "deepseek/deepseek-chat")
         self.api_key = config.get("API_KEY") or os.environ.get("AI_API_KEY", "")
@@ -40,12 +42,12 @@ class AIClient:
         self.timeout = config.get("TIMEOUT", 120)
         self.num_retries = config.get("NUM_RETRIES", 2)
         self.fallback_models = config.get("FALLBACK_MODELS", [])
-        # config.yaml 中 ai.extra_params 的透传参数（如自定义请求头）
+        # config.yaml �� ai.extra_params ��͸�����������Զ�������ͷ��
         self.extra_params = config.get("EXTRA_PARAMS") or {}
         if not isinstance(self.extra_params, dict):
             print(
-                f"[AI] 配置错误: ai.extra_params 应为字典，"
-                f"当前为 {type(self.extra_params).__name__}，已忽略"
+                f"[AI] ���ô���: ai.extra_params ӦΪ�ֵ䣬"
+                f"��ǰΪ {type(self.extra_params).__name__}���Ѻ���"
             )
             self.extra_params = {}
 
@@ -55,19 +57,19 @@ class AIClient:
         **kwargs
     ) -> str:
         """
-        调用 AI 模型进行对话
+        ���� AI ģ�ͽ��жԻ�
 
         Args:
-            messages: 消息列表，格式: [{"role": "system/user/assistant", "content": "..."}]
-            **kwargs: 额外参数，会覆盖默认配置
+            messages: ��Ϣ�б�����ʽ: [{"role": "system/user/assistant", "content": "..."}]
+            **kwargs: ����������Ḳ��Ĭ������
 
         Returns:
-            str: AI 响应内容
+            str: AI ��Ӧ����
 
         Raises:
-            Exception: API 调用失败时抛出异常
+            Exception: API ����ʧ��ʱ�׳��쳣
         """
-        # 构建请求参数
+        # �����������
         params = {
             "model": self.model,
             "messages": messages,
@@ -76,35 +78,46 @@ class AIClient:
             "num_retries": kwargs.get("num_retries", self.num_retries),
         }
 
-        # 添加 API Key
+        # ���� API Key
         if self.api_key:
             params["api_key"] = self.api_key
 
-        # 添加 API Base（如果配置了）
+        # ���� API Base����������ˣ�
         if self.api_base:
             params["api_base"] = self.api_base
 
-        # 添加 max_tokens（如果配置了且不为 0）
+        # ���� max_tokens������������Ҳ�Ϊ 0��
         max_tokens = kwargs.get("max_tokens", self.max_tokens)
         if max_tokens and max_tokens > 0:
             params["max_tokens"] = max_tokens
 
-        # 添加 fallback 模型（如果配置了）
+        # ���� fallback ģ�ͣ���������ˣ�
         if self.fallback_models:
             params["fallbacks"] = self.fallback_models
 
-        # 合并配置文件中的 extra_params（如自定义请求头 extra_headers），
-        # 再用调用方 kwargs 覆盖；两者均不覆盖上方已确定的核心参数，
-        # 因此未配置 extra_params 时行为与原先完全一致
+        # �ϲ������ļ��е� extra_params�����Զ�������ͷ extra_headers����
+        # ���õ��÷� kwargs ���ǣ����߾��������Ϸ���ȷ���ĺ��Ĳ�����
+        # ���δ���� extra_params ʱ��Ϊ��ԭ����ȫһ��
         for key, value in {**self.extra_params, **kwargs}.items():
             if key not in params:
                 params[key] = value
 
-        # 调用 LiteLLM
+        # OpenCode Go routes requests by conversation. Each chat call is an
+        # independent analysis; LiteLLM retries reuse these same parameters.
+        endpoint = urlparse(self.api_base or "")
+        if endpoint.hostname == "opencode.ai" and "go" in endpoint.path.split("/"):
+            headers = dict(params.get("extra_headers") or {})
+            if not any(key.lower() == "x-opencode-session" for key in headers):
+                headers["x-opencode-session"] = str(uuid.uuid4())
+            if not any(key.lower() == "user-agent" for key in headers):
+                headers["User-Agent"] = "TrendRadar/1.0"
+            params["extra_headers"] = headers
+
+        # ���� LiteLLM
         response = completion(**params)
 
-        # 提取响应内容
-        # 某些模型/提供商返回 list（内容块）而非 str，统一转为 str
+        # ��ȡ��Ӧ����
+        # ĳЩģ��/�ṩ�̷��� list�����ݿ飩���� str��ͳһתΪ str
         content = response.choices[0].message.content
         if isinstance(content, list):
             content = "\n".join(
@@ -115,19 +128,21 @@ class AIClient:
 
     def validate_config(self) -> tuple[bool, str]:
         """
-        验证配置是否有效
+        ��֤�����Ƿ���Ч
 
         Returns:
-            tuple: (是否有效, 错误信息)
+            tuple: (�Ƿ���Ч, ������Ϣ)
         """
         if not self.model:
-            return False, "未配置 AI 模型（model）"
+            return False, "δ���� AI ģ�ͣ�model��"
 
         if not self.api_key:
-            return False, "未配置 AI API Key，请在 config.yaml 或环境变量 AI_API_KEY 中设置"
+            return False, "δ���� AI API Key������ config.yaml �򻷾����� AI_API_KEY ������"
 
-        # 验证模型格式（应该包含 provider/model）
+        # ��֤ģ�͸�ʽ��Ӧ�ð��� provider/model��
         if "/" not in self.model:
-            return False, f"模型格式错误: {self.model}，应为 'provider/model' 格式（如 'deepseek/deepseek-chat'）"
+            return False, f"ģ�͸�ʽ����: {self.model}��ӦΪ 'provider/model' ��ʽ���� 'deepseek/deepseek-chat'��"
 
         return True, ""
+
+
