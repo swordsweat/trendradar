@@ -119,6 +119,13 @@ class AIClient:
         # ��ȡ��Ӧ����
         # ĳЩģ��/�ṩ�̷��� list�����ݿ飩���� str��ͳһתΪ str
         content = response.choices[0].message.content
+        if not content:
+            usage = getattr(response, "usage", None)
+            print(
+                "[AI] ���������: "
+                f"finish_reason={getattr(response.choices[0], 'finish_reason', None)}, "
+                f"completion_tokens={getattr(usage, 'completion_tokens', None)}"
+            )
         if isinstance(content, list):
             content = "\n".join(
                 item.get("text", str(item)) if isinstance(item, dict) else str(item)
