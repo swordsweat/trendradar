@@ -1,14 +1,21 @@
 # Registered TrendRadar workflows
 name: Check In
 
-# ✅ 签到续期：运行此 workflow 可重置 7 天计时，保持 "Get Hot News" 正常运行
-# ✅ Renewal: Run this workflow to reset the 7-day timer and keep "Get Hot News" active
+# ✅ 签到续期：每 6 天自动签到一次，重置 7 天计时，保持 "Get Hot News" 正常运行
+# ✅ Renewal: Auto check-in every 6 days to reset the 7-day timer and keep "Get Hot News" active
 #
-# 📌 操作方法 / How to use:
-#   1. 点击 "Run workflow" 按钮 / Click "Run workflow" button
-#   2. 每 7 天内至少运行一次 / Run at least once every 7 days
+# 📌 定时规则 / Schedule:
+#   - "17 3 */6 * *" → UTC 03:17（北京时间 11:17），每月 1/7/13/19/25/31 号运行
+#   - 保留手动触发 / Manual trigger still available
+#
+# ⚠️ 说明 / Note:
+#   cron 的 */6 按月内日期计算（1,7,13,19,25,31），跨月会重置，
+#   最大间隔不超过 7 天，满足签到续期要求。
+#   GitHub Actions 定时任务可能因平台负载延迟数分钟。
 
 on:
+  schedule:
+    - cron: "17 3 */6 * *"
   workflow_dispatch:
 
 jobs:
